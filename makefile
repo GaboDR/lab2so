@@ -3,8 +3,8 @@ CFLAGS = -std=c++17
 
 all: program
 
-program: main.cpp
-	$(CC) $(CFLAGS) -o program main.cpp
+program: LAB1_Delgado_Rivero.cpp
+	$(CC) $(CFLAGS) -o program LAB1_Delgado_Rivero.cpp
 
 run:
 	./program
