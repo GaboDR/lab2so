@@ -52,6 +52,8 @@ typedef struct shared_block
 
     int termino;
 
+    int distribucion;
+
     reporte_t reportes[4];
 } shared_block_t;
 
@@ -62,6 +64,8 @@ sem_t *sem_turn[4];
 sem_t *sem_step_done;
 sem_t *sem_done;
 sem_t *sem_mutex;
+sem_t *sem_day_start;
+
 
 static const char *TAG[4] = {
     "EQUIPO AGUA", "EQUIPO ALIMENTOS", "EQUIPO CONSTRUCCION", "EQUIPO SENALES"};
@@ -206,6 +210,8 @@ int shm_setup()
 
     SHM->termino = 0;
 
+    SHM->distribucion = 0;
+
     for (int i = 0; i < 4; ++i)
     {
         SHM->reportes[i].id = 0;
@@ -237,6 +243,16 @@ int main()
     if (shm_setup() == -1)
         return 1;
 
+    // Limpieza preventiva por si quedaron semáforos de una corrida anterior
+    sem_unlink("/lab2_turn0");
+    sem_unlink("/lab2_turn1");
+    sem_unlink("/lab2_turn2");
+    sem_unlink("/lab2_turn3");
+    sem_unlink("/lab2_step");
+    sem_unlink("/lab2_done");
+    sem_unlink("/lab2_mutex");
+    sem_unlink("/lab2_day_start");
+
     sem_turn[0] = sem_open("/lab2_turn0", O_CREAT, 0600, 0);
     sem_turn[1] = sem_open("/lab2_turn1", O_CREAT, 0600, 0);
     sem_turn[2] = sem_open("/lab2_turn2", O_CREAT, 0600, 0);
@@ -244,6 +260,8 @@ int main()
     sem_step_done = sem_open("/lab2_step", O_CREAT, 0600, 0);
     sem_done = sem_open("/lab2_done", O_CREAT, 0600, 0);
     sem_mutex = sem_open("/lab2_mutex", O_CREAT, 0600, 1);
+    sem_day_start = sem_open("/lab2_day_start", O_CREAT, 0600, 0);
+
 
     if (!sem_turn[0] || !sem_turn[1] || !sem_turn[2] || !sem_turn[3] || !sem_step_done || !sem_done || !sem_mutex)
     {
@@ -279,6 +297,8 @@ int main()
             printf("=== DIA %d DE SUPERVIVENCIA ===\n", dia);
             printf("Iniciando recoleccion de recursos...\n");
 
+            sleep(2);
+
             // Resetear reportes
             for (int i = 0; i < 4; ++i)
             {
@@ -286,6 +306,11 @@ int main()
                 SHM->reportes[i].recoleccion = 0;
                 SHM->reportes[i].estado = -1; // -1 = aún no reporta
             }
+
+            SHM->distribucion = (rand() % 3) + 1;
+
+            // liberar a los 4 hijos para que lean la nueva distribucion
+            for (int i = 0; i < 4; ++i) sem_post(sem_day_start);
 
             // Esto es solo para printear todo de forma ordenada (con las 3 rondas de la tarea)
             sem_post(sem_turn[0]);
@@ -358,12 +383,16 @@ int main()
             if (SHM->moral == 0)
             {
                 printf("La moral del grupo ha llegado a 0. El grupo no puede continuar. FIN DEL JUEGO.\n");
+                SHM->termino = 1;
+                for (int i = 0; i < 4; ++i) sem_post(sem_day_start);  // liberar a todos los hijos
                 break;
             }
 
             if (racha_senales >= 10)
             {
                 printf("El grupo ha mantenido señales efectivas por 10 dias consecutivos. RESCATE LOGRADO. FIN DEL JUEGO.\n");
+                SHM->termino = 1;
+                for (int i = 0; i < 4; ++i) sem_post(sem_day_start);
                 break;
             }
         }
@@ -376,6 +405,7 @@ int main()
             sem_close(sem_step_done);
             sem_close(sem_done);
             sem_close(sem_mutex);
+            sem_close(sem_day_start);
 
             sem_unlink("/lab2_turn0");
             sem_unlink("/lab2_turn1");
@@ -384,6 +414,7 @@ int main()
             sem_unlink("/lab2_step");
             sem_unlink("/lab2_done");
             sem_unlink("/lab2_mutex");
+            sem_unlink("/lab2_day_start");
 
         shm_teardown();
         return 0;
@@ -395,9 +426,16 @@ int main()
 
         for (int dia = 1; dia <= dias; dia++)
         {
-            imprimir_tres_rondas(my_team);
+            sem_wait(sem_day_start);            // ← asegura que ya está la nueva distribucion
+            
+            if (SHM->termino) {        // ← salir limpio si el padre anunció término
+            break;
+            }
 
-            switch (my_team)
+            int tarea = (my_team + SHM->distribucion) % 4;
+            imprimir_tres_rondas(tarea );
+
+            switch (tarea)
             {
             case TEAM_AGUA:
                 agua();
