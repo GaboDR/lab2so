@@ -5,7 +5,6 @@ IMPORTANTE SOBRE PAQUETES USADOS
 --------------------------------------------------------------------
 - Requerido:  
  * make (necesario para ejecutar el makefile).
- * unzip (necesario para descomprimir la carpeta).
  * Librerías POSIX usadas: sem_open, shm_open, mmap.
 --------------------------------------------------------------------
 AMBIENTE DE EJECUCION USADO

@@ -12,7 +12,6 @@
 #include <semaphore.h>
 
 using namespace std;
-
 // Enumeramos los equipos
 enum Team
 {
